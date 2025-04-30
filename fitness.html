@@ -6,6 +6,80 @@
   <title>每日運動記錄與分析工具</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-b from-blue-100 to-blue-300 min-h-screen text-gray-800 p-4">
+  <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- 表單區 -->
+    <div class="bg-white p-6 rounded-2xl shadow-md">
+      <h2 class="text-xl font-bold mb-4">➕ 添加運動記錄</h2>
+      <form id="exercise-form" class="space-y-4">
+        <div>
+          <label for="date" class="block text-sm font-medium">日期</label>
+          <input type="date" id="date" class="border p-2 rounded w-full" required>
+        </div>
+        <div>
+          <label for="type" class="block text-sm font-medium">運動類型</label>
+          <select id="type" class="border p-2 rounded w-full" required>
+            <option value="">請選擇運動類型</option>
+            <option>跑步</option>
+            <option>健走</option>
+            <option>游泳</option>
+            <option>騎車</option>
+            <option>重訓</option>
+            <option>瑜珈</option>
+            <option>其他</option>
+          </select>
+        </div>
+        <div>
+          <label for="duration" class="block text-sm font-medium">時間（分鐘）</label>
+          <input type="number" id="duration" class="border p-2 rounded w-full" required>
+        </div>
+        <div>
+          <label for="calories" class="block text-sm font-medium">消耗熱量（Kcal）</label>
+          <input type="number" id="calories" class="border p-2 rounded w-full">
+        </div>
+        <div>
+          <label for="note" class="block text-sm font-medium">備註</label>
+          <input type="text" id="note" class="border p-2 rounded w-full">
+        </div>
+        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 w-full">保存記錄</button>
+      </form>
+    </div>
+
+    <!-- 圖表分析區 -->
+    <div class="bg-white p-6 rounded-2xl shadow-md">
+      <h2 class="text-xl font-bold mb-4">📊 運動數據分析</h2>
+      <canvas id="summaryChart" class="mb-4"></canvas>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-white">
+        <div class="bg-blue-500 p-4 rounded-xl">
+          <div class="text-xl font-bold" id="totalTime">0 分鐘</div>
+          <div class="text-sm">總運動時間</div>
+        </div>
+        <div class="bg-green-500 p-4 rounded-xl">
+          <div class="text-xl font-bold" id="totalCalories">0 卡</div>
+          <div class="text-sm">總消耗卡路里</div>
+        </div>
+        <div class="bg-purple-500 p-4 rounded-xl">
+          <div class="text-xl font-bold" id="totalSessions">0 次</div>
+          <div class="text-sm">運動次數</div>
+        </div>
+        <div class="bg-yellow-400 p-4 rounded-xl">
+          <div class="text-xl font-bold" id="mostType">-</div>
+          <div class="text-sm">最常進行</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 記錄清單區 -->
+    <div class="col-span-1 md:col-span-2">
+      <div class="bg-white p-6 rounded-2xl shadow-md mt-6">
+        <h2 class="text-xl font-bold mb-4">📋 運動記錄</h2>
+        <div id="records" class="space-y-4"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
@@ -24,6 +98,10 @@
     const form = document.getElementById("exercise-form");
     const recordsDiv = document.getElementById("records");
     const chartCtx = document.getElementById("summaryChart").getContext("2d");
+    const totalTimeEl = document.getElementById("totalTime");
+    const totalCaloriesEl = document.getElementById("totalCalories");
+    const totalSessionsEl = document.getElementById("totalSessions");
+    const mostTypeEl = document.getElementById("mostType");
 
     async function fetchData() {
       const querySnapshot = await getDocs(collection(db, "exerciseData"));
@@ -45,34 +123,31 @@
 
     function renderTable(data) {
       if (data.length === 0) {
-        recordsDiv.innerHTML = "<p class='text-gray-600'>目前尚無記錄。</p>";
+        recordsDiv.innerHTML = "<p class='text-gray-500'>目前尚無記錄。</p>";
         return;
       }
-      const rows = data.map((e, i) => `
-        <tr class="hover:bg-blue-50">
-          <td class="border px-2 py-1">${e.date}</td>
-          <td class="border px-2 py-1">${e.type}</td>
-          <td class="border px-2 py-1">${e.duration}</td>
-          <td class="border px-2 py-1">${e.calories}</td>
-          <td class="border px-2 py-1">${e.note || ""}</td>
-          <td class="border px-2 py-1">
-            <button onclick="deleteRecord('${e.id}')" class="text-red-600 hover:underline">刪除</button>
-          </td>
-        </tr>`).join("");
-      recordsDiv.innerHTML = `
-        <table class="w-full text-sm">
-          <thead class="bg-blue-100">
-            <tr>
-              <th class="border px-2 py-1">日期</th>
-              <th class="border px-2 py-1">類型</th>
-              <th class="border px-2 py-1">時間</th>
-              <th class="border px-2 py-1">熱量</th>
-              <th class="border px-2 py-1">備註</th>
-              <th class="border px-2 py-1">操作</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>`;
+      const grouped = {};
+      data.forEach(e => {
+        if (!grouped[e.date]) grouped[e.date] = [];
+        grouped[e.date].push(e);
+      });
+      const html = Object.entries(grouped).map(([date, records]) => {
+        return records.map(e => `
+          <div class="border rounded-xl p-4 flex justify-between items-center shadow-sm">
+            <div>
+              <div class="font-bold text-lg">${e.type}</div>
+              <div class="text-sm text-gray-500">${date}</div>
+            </div>
+            <div class="flex space-x-6 text-center">
+              <div><div class="text-blue-600 font-bold">${e.duration} 分鐘</div><div class="text-xs text-gray-500">時間</div></div>
+              <div><div class="text-green-600 font-bold">${e.calories || 0} 卡</div><div class="text-xs text-gray-500">卡路里</div></div>
+            </div>
+            <div class="flex space-x-2">
+              <button onclick="deleteRecord('${e.id}')" class="text-red-500 hover:text-red-700">🗑</button>
+            </div>
+          </div>`).join("");
+      }).join("");
+      recordsDiv.innerHTML = html;
     }
 
     function renderChart(data) {
@@ -83,7 +158,7 @@
       data.forEach(({ date, duration, calories: kcal }) => {
         if (!grouped[date]) grouped[date] = { duration: 0, calories: 0 };
         grouped[date].duration += Number(duration);
-        grouped[date].calories += Number(kcal);
+        grouped[date].calories += Number(kcal || 0);
       });
       for (let d of Object.keys(grouped).sort()) {
         labels.push(d);
@@ -97,18 +172,36 @@
         data: {
           labels,
           datasets: [
-            { label: '時間 (分鐘)', data: durations, backgroundColor: 'rgba(59,130,246,0.5)' },
-            { label: '熱量 (Kcal)', data: calories, backgroundColor: 'rgba(234,88,12,0.5)' }
+            { label: '運動時間（分鐘）', data: durations, backgroundColor: 'rgba(59,130,246,0.5)' },
+            { label: '消耗卡路里', data: calories, type: 'line', borderColor: 'rgba(16, 185, 129, 1)', backgroundColor: 'rgba(16, 185, 129, 0.2)' }
           ]
         },
         options: { responsive: true, scales: { y: { beginAtZero: true } } }
       });
     }
 
+    function calculateStats(data) {
+      const totalTime = data.reduce((sum, d) => sum + Number(d.duration), 0);
+      const totalCalories = data.reduce((sum, d) => sum + Number(d.calories || 0), 0);
+      const sessions = data.length;
+      const typeCount = {};
+      data.forEach(d => {
+        if (!typeCount[d.type]) typeCount[d.type] = 0;
+        typeCount[d.type]++;
+      });
+      const mostCommon = Object.entries(typeCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
+
+      totalTimeEl.textContent = `${totalTime} 分鐘`;
+      totalCaloriesEl.textContent = `${totalCalories} 卡`;
+      totalSessionsEl.textContent = `${sessions} 次`;
+      mostTypeEl.textContent = mostCommon;
+    }
+
     async function updateUI() {
       const data = await fetchData();
       renderTable(data);
       renderChart(data);
+      calculateStats(data);
     }
 
     form.addEventListener("submit", async (e) => {
@@ -125,37 +218,8 @@
       updateUI();
     });
 
+    window.deleteRecord = deleteRecord;
     updateUI();
   </script>
-</head>
-<body class="bg-gradient-to-b from-blue-100 to-blue-300 min-h-screen text-gray-800 p-4">
-  <div class="max-w-4xl mx-auto space-y-6">
-    <h1 class="text-3xl font-bold text-center">🏃‍♂️ 每日運動記錄與分析工具</h1>
-
-    <!-- 表單區 -->
-    <div class="bg-white p-4 rounded-2xl shadow-md">
-      <h2 class="text-xl font-semibold mb-2">新增運動記錄</h2>
-      <form id="exercise-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <input type="date" id="date" class="border p-2 rounded w-full" required>
-        <input type="text" id="type" placeholder="運動類型 (如跑步)" class="border p-2 rounded w-full" required>
-        <input type="number" id="duration" placeholder="時間 (分鐘)" class="border p-2 rounded w-full" required>
-        <input type="number" id="calories" placeholder="消耗熱量 (Kcal)" class="border p-2 rounded w-full" required>
-        <input type="text" id="note" placeholder="備註 (選填)" class="border p-2 rounded w-full">
-        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 md:col-span-2">新增記錄</button>
-      </form>
-    </div>
-
-    <!-- 記錄列表 -->
-    <div class="bg-white p-4 rounded-2xl shadow-md">
-      <h2 class="text-xl font-semibold mb-2">📋 運動記錄列表</h2>
-      <div id="records" class="overflow-x-auto"></div>
-    </div>
-
-    <!-- 圖表分析 -->
-    <div class="bg-white p-4 rounded-2xl shadow-md">
-      <h2 class="text-xl font-semibold mb-2">📈 運動數據分析</h2>
-      <canvas id="summaryChart"></canvas>
-    </div>
-  </div>
 </body>
 </html>
