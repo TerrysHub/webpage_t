@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>每日運動記錄與分析工具</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBKC_0JsPc0T0en3fi1Jxem5Q8U7awLzP4",
+      authDomain: "fitnesstracker-abb02.firebaseapp.com",
+      projectId: "fitnesstracker-abb02",
+      storageBucket: "fitnesstracker-abb02.firebasestorage.app",
+      messagingSenderId: "267988781601",
+      appId: "1:267988781601:web:b3914ea1becded7402b160"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const form = document.getElementById("exercise-form");
+    const recordsDiv = document.getElementById("records");
+    const chartCtx = document.getElementById("summaryChart").getContext("2d");
+
+    async function fetchData() {
+      const querySnapshot = await getDocs(collection(db, "exerciseData"));
+      const data = [];
+      querySnapshot.forEach(doc => data.push({ id: doc.id, ...doc.data() }));
+      return data;
+    }
+
+    async function saveData(record) {
+      await addDoc(collection(db, "exerciseData"), record);
+    }
+
+    async function deleteRecord(id) {
+      if (confirm("確認刪除此筆紀錄？")) {
+        await deleteDoc(doc(db, "exerciseData", id));
+        updateUI();
+      }
+    }
+
+    function renderTable(data) {
+      if (data.length === 0) {
+        recordsDiv.innerHTML = "<p class='text-gray-600'>目前尚無記錄。</p>";
+        return;
+      }
+      const rows = data.map((e, i) => `
+        <tr class="hover:bg-blue-50">
+          <td class="border px-2 py-1">${e.date}</td>
+          <td class="border px-2 py-1">${e.type}</td>
+          <td class="border px-2 py-1">${e.duration}</td>
+          <td class="border px-2 py-1">${e.calories}</td>
+          <td class="border px-2 py-1">${e.note || ""}</td>
+          <td class="border px-2 py-1">
+            <button onclick="deleteRecord('${e.id}')" class="text-red-600 hover:underline">刪除</button>
+          </td>
+        </tr>`).join("");
+      recordsDiv.innerHTML = `
+        <table class="w-full text-sm">
+          <thead class="bg-blue-100">
+            <tr>
+              <th class="border px-2 py-1">日期</th>
+              <th class="border px-2 py-1">類型</th>
+              <th class="border px-2 py-1">時間</th>
+              <th class="border px-2 py-1">熱量</th>
+              <th class="border px-2 py-1">備註</th>
+              <th class="border px-2 py-1">操作</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    function renderChart(data) {
+      const labels = [];
+      const durations = [];
+      const calories = [];
+      const grouped = {};
+      data.forEach(({ date, duration, calories: kcal }) => {
+        if (!grouped[date]) grouped[date] = { duration: 0, calories: 0 };
+        grouped[date].duration += Number(duration);
+        grouped[date].calories += Number(kcal);
+      });
+      for (let d of Object.keys(grouped).sort()) {
+        labels.push(d);
+        durations.push(grouped[d].duration);
+        calories.push(grouped[d].calories);
+      }
+
+      if (window.exerciseChart) window.exerciseChart.destroy();
+      window.exerciseChart = new Chart(chartCtx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: '時間 (分鐘)', data: durations, backgroundColor: 'rgba(59,130,246,0.5)' },
+            { label: '熱量 (Kcal)', data: calories, backgroundColor: 'rgba(234,88,12,0.5)' }
+          ]
+        },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    async function updateUI() {
+      const data = await fetchData();
+      renderTable(data);
+      renderChart(data);
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const newRecord = {
+        date: form.date.value,
+        type: form.type.value,
+        duration: form.duration.value,
+        calories: form.calories.value,
+        note: form.note.value,
+      };
+      await saveData(newRecord);
+      form.reset();
+      updateUI();
+    });
+
+    updateUI();
+  </script>
+</head>
+<body class="bg-gradient-to-b from-blue-100 to-blue-300 min-h-screen text-gray-800 p-4">
+  <div class="max-w-4xl mx-auto space-y-6">
+    <h1 class="text-3xl font-bold text-center">🏃‍♂️ 每日運動記錄與分析工具</h1>
+
+    <!-- 表單區 -->
+    <div class="bg-white p-4 rounded-2xl shadow-md">
+      <h2 class="text-xl font-semibold mb-2">新增運動記錄</h2>
+      <form id="exercise-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input type="date" id="date" class="border p-2 rounded w-full" required>
+        <input type="text" id="type" placeholder="運動類型 (如跑步)" class="border p-2 rounded w-full" required>
+        <input type="number" id="duration" placeholder="時間 (分鐘)" class="border p-2 rounded w-full" required>
+        <input type="number" id="calories" placeholder="消耗熱量 (Kcal)" class="border p-2 rounded w-full" required>
+        <input type="text" id="note" placeholder="備註 (選填)" class="border p-2 rounded w-full">
+        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 md:col-span-2">新增記錄</button>
+      </form>
+    </div>
+
+    <!-- 記錄列表 -->
+    <div class="bg-white p-4 rounded-2xl shadow-md">
+      <h2 class="text-xl font-semibold mb-2">📋 運動記錄列表</h2>
+      <div id="records" class="overflow-x-auto"></div>
+    </div>
+
+    <!-- 圖表分析 -->
+    <div class="bg-white p-4 rounded-2xl shadow-md">
+      <h2 class="text-xl font-semibold mb-2">📈 運動數據分析</h2>
+      <canvas id="summaryChart"></canvas>
+    </div>
+  </div>
+</body>
+</html>
